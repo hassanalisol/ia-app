@@ -381,6 +381,11 @@
     </div>
   </div>
 
+  <!-- KEY DATES -->
+  <div class="screen" id="screen-dates">
+    <div id="dates-list"></div>
+  </div>
+
   <!-- ZIYARAT & AMAAL -->
   <div class="screen" id="screen-ziyarat">
     <div id="ziyarat-list"></div>
@@ -491,16 +496,34 @@ const METHOD = 0;
 // INIT
 // ══════════════════════════════════════════════════
 async function init() {
-  await requestNotifications();
-  await loadPrayerTimes();
-  await loadHijriDate();
-  renderPrayers();
-  renderDates();
-  renderZiyarat();
-  renderCalendar();
-  startCountdown();
-  scheduleAzaan();
-  document.getElementById('loading').style.display = 'none';
+  try {
+    await requestNotifications();
+    await Promise.race([
+      loadPrayerTimes(),
+      new Promise((_,r) => setTimeout(() => r('timeout'), 8000))
+    ]).catch(() => {
+      // Use fallback times if API fails or times out
+      prayerTimes = { Fajr:'03:10', Sunrise:'04:45', Dhuhr:'13:05', Asr:'17:30', Maghrib:'21:15', Isha:'22:45', Midnight:'01:05' };
+    });
+    await Promise.race([
+      loadHijriDate(),
+      new Promise((_,r) => setTimeout(() => r('timeout'), 8000))
+    ]).catch(() => {
+      hijriDate = { day:'—', month:{ number:12, ar:'ذو الحجة', en:"Dhul Hijja", number:12 }, year:'1447', designation:{ abbreviated:'AH' } };
+      calHijriYear = 1447; calHijriMonth = 12;
+      updateHijriBanner();
+    });
+  } catch(e) {
+    console.error('Init error:', e);
+  } finally {
+    renderPrayers();
+    renderDates();
+    renderZiyarat();
+    renderCalendar();
+    startCountdown();
+    scheduleAzaan();
+    document.getElementById('loading').style.display = 'none';
+  }
 }
 
 async function requestNotifications() {
