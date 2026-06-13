@@ -75,14 +75,19 @@
     text-align:center;
   }
   #azaan-btn {
-    background:none; border:1px solid var(--border-bright);
-    border-radius:50%; width:38px; height:38px;
-    color:var(--gold); font-size:18px; cursor:pointer;
-    display:flex; align-items:center; justify-content:center;
+    background: rgba(201,168,76,0.15);
+    border:1px solid var(--border-bright);
+    border-radius:10px;
+    padding: 8px 14px;
+    color:var(--gold);
+    font-size:13px;
+    cursor:pointer;
+    display:flex; align-items:center; gap:6px;
     transition:background 0.2s;
+    letter-spacing:0.5px;
   }
-  #azaan-btn:active { background:rgba(201,168,76,0.1); }
-  #azaan-btn.playing { border-color:var(--teal-light); color:var(--teal-light); animation:pulse 1.5s infinite; }
+  #azaan-btn:active { background:rgba(201,168,76,0.25); }
+  #azaan-btn.playing { border-color:var(--teal-light); color:var(--teal-light); background:rgba(61,184,122,0.15); animation:pulse 1.5s infinite; }
   @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(61,184,158,0.4)} 50%{box-shadow:0 0 0 8px rgba(61,184,158,0)} }
 
   /* ── TABS ── */
@@ -230,7 +235,37 @@
     vertical-align:middle;
   }
 
-  /* ── LOADING ── */
+  /* ── ZIYARAT ── */
+  .ziyarat-card {
+    background:var(--bg-card); border:1px solid var(--border);
+    border-radius:var(--r); margin-bottom:10px; overflow:hidden;
+  }
+  .ziyarat-card.post-salah { border-left:3px solid var(--gold); }
+  .ziyarat-card.amaal { border-left:3px solid var(--teal-light); }
+  .ziyarat-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px; cursor:pointer;
+  }
+  .ziyarat-header:active { background:var(--bg-card2); }
+  .ziyarat-title-ar { font-family:var(--arabic); font-size:20px; color:var(--gold); }
+  .ziyarat-title-sub { font-size:11px; color:var(--text-muted); margin-top:2px; }
+  .ziyarat-chevron { color:var(--text-dim); font-size:18px; transition:transform 0.25s; flex-shrink:0; }
+  .ziyarat-chevron.open { transform:rotate(180deg); }
+  .ziyarat-body {
+    display:none; padding:0 16px 18px;
+    border-top:1px solid var(--border);
+  }
+  .ziyarat-body.open { display:block; }
+  .ziyarat-text {
+    font-family:var(--arabic); font-size:20px; color:var(--text-main);
+    line-height:2; text-align:right; direction:rtl;
+    padding-top:14px;
+  }
+  .ziyarat-note {
+    font-size:11px; color:var(--text-muted); margin-top:10px;
+    padding-top:10px; border-top:1px solid var(--border);
+    font-style:italic;
+  }
   #loading {
     position:fixed; inset:0; background:var(--bg-deep);
     display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -281,7 +316,7 @@
       <div id="app-subtitle">Ithna Ashari • Sistani</div>
     </div>
     <button id="azaan-btn" title="Play Azaan" onclick="toggleAzaan()">
-      <i class="ti ti-volume"></i>
+      <i class="ti ti-volume" style="font-size:16px;"></i> Azaan
     </button>
   </div>
   <div id="hijri-banner">
@@ -300,6 +335,9 @@
   </button>
   <button class="tab" onclick="showTab('dates')" id="tab-dates">
     <i class="ti ti-star"></i>Key Dates
+  </button>
+  <button class="tab" onclick="showTab('ziyarat')" id="tab-ziyarat">
+    <i class="ti ti-book"></i>Ziyarat
   </button>
 </div>
 
@@ -343,9 +381,9 @@
     </div>
   </div>
 
-  <!-- KEY DATES -->
-  <div class="screen" id="screen-dates">
-    <div id="dates-list"></div>
+  <!-- ZIYARAT & AMAAL -->
+  <div class="screen" id="screen-ziyarat">
+    <div id="ziyarat-list"></div>
   </div>
 </div>
 
@@ -358,8 +396,9 @@
   <div id="event-popup-desc"></div>
 </div>
 
-<audio id="azaan-audio" preload="none">
+<audio id="azaan-audio" preload="none" crossorigin="anonymous">
   <source src="https://www.shiasource.com/wp-content/uploads/2018/07/adhan_alhalawaji.mp3" type="audio/mpeg">
+  <source src="https://cdn.aladhan.com/audio/adhans/a1.mp3" type="audio/mpeg">
 </audio>
 
 <script>
@@ -457,6 +496,7 @@ async function init() {
   await loadHijriDate();
   renderPrayers();
   renderDates();
+  renderZiyarat();
   renderCalendar();
   startCountdown();
   scheduleAzaan();
@@ -629,25 +669,46 @@ function toggleAzaan() {
 }
 
 function playAzaan() {
-  azaanAudio.currentTime = 0;
-  azaanAudio.play().then(() => {
-    azaanPlaying = true;
-    const btn = document.getElementById('azaan-btn');
-    btn.classList.add('playing');
-    btn.innerHTML = '<i class="ti ti-volume-off"></i>';
-  }).catch(e => {
-    alert('Azaan audio could not play. Please check your connection.');
-  });
-  azaanAudio.onended = stopAzaan;
+  const audio = document.getElementById('azaan-audio');
+  // Try primary source first, fall back to secondary
+  audio.load();
+  audio.currentTime = 0;
+  const playPromise = audio.play();
+  if (playPromise !== undefined) {
+    playPromise.then(() => {
+      azaanPlaying = true;
+      const btn = document.getElementById('azaan-btn');
+      btn.classList.add('playing');
+      btn.innerHTML = '<i class="ti ti-volume-off" style="font-size:16px;"></i> Stop';
+    }).catch(err => {
+      console.log('Primary source failed, trying fallback:', err);
+      // Try fallback CDN source directly
+      audio.src = 'https://cdn.aladhan.com/audio/adhans/a1.mp3';
+      audio.load();
+      audio.play().then(() => {
+        azaanPlaying = true;
+        const btn = document.getElementById('azaan-btn');
+        btn.classList.add('playing');
+        btn.innerHTML = '<i class="ti ti-volume-off" style="font-size:16px;"></i> Stop';
+      }).catch(e2 => {
+        console.error('Azaan playback failed:', e2);
+        const btn = document.getElementById('azaan-btn');
+        btn.innerHTML = '<i class="ti ti-volume" style="font-size:16px;"></i> Azaan';
+        alert('Audio blocked. Please tap the Azaan button again or check your volume.');
+      });
+    });
+  }
+  audio.onended = stopAzaan;
 }
 
 function stopAzaan() {
-  azaanAudio.pause();
-  azaanAudio.currentTime = 0;
+  const audio = document.getElementById('azaan-audio');
+  audio.pause();
+  audio.currentTime = 0;
   azaanPlaying = false;
   const btn = document.getElementById('azaan-btn');
   btn.classList.remove('playing');
-  btn.innerHTML = '<i class="ti ti-volume"></i>';
+  btn.innerHTML = '<i class="ti ti-volume" style="font-size:16px;"></i> Azaan';
 }
 
 function scheduleAzaan() {
@@ -862,8 +923,209 @@ function calcDaysAway(evMonth, evDay, todayMonth, todayDay) {
 }
 
 // ══════════════════════════════════════════════════
-// TABS
+// ZIYARAT & A'MAAL DATA
 // ══════════════════════════════════════════════════
+const ZIYARAT_POST_SALAH = [
+  {
+    title: 'زيارة الإمام الحسين (ع)',
+    sub: 'Ziyarat Imam Husayn (AS) — after every prayer',
+    type: 'post-salah',
+    note: 'تُقرأ بعد كل صلاة مستحبةً',
+    text: `السَّلامُ عَلَيْكَ يا أَبا عَبْدِ اللهِ
+السَّلامُ عَلَيْكَ يا ابْنَ رَسُولِ اللهِ
+السَّلامُ عَلَيْكَ يا ابْنَ أَمِيرِ الْمُؤْمِنِينَ
+وَابْنَ سَيِّدَةِ النِّسَاءِ
+السَّلامُ عَلَيْكَ يا ابْنَ الْحُسَيْنِ الشَّهِيدِ
+السَّلامُ عَلَيْكَ أَيُّهَا الشَّهِيدُ
+السَّلامُ عَلَيْكَ أَيُّهَا الصِّدِّيقُ
+السَّلامُ عَلَيْكَ يا ثَارَ اللهِ وَابْنَ ثَارِهِ
+وَالْوِتْرَ الْمَوْتُورَ
+أَشْهَدُ أَنَّكَ قَدْ أَقَمْتَ الصَّلاةَ
+وَآتَيْتَ الزَّكاةَ
+وَأَمَرْتَ بِالْمَعْرُوفِ وَنَهَيْتَ عَنِ الْمُنْكَرِ
+وَأَطَعْتَ اللهَ وَرَسُولَهُ حَتَّى أَتاكَ الْيَقِينُ
+فَلَعَنَ اللهُ أُمَّةً قَتَلَتْكَ
+وَلَعَنَ اللهُ أُمَّةً ظَلَمَتْكَ
+وَلَعَنَ اللهُ أُمَّةً سَمِعَتْ بِذَلِكَ فَرَضِيَتْ بِهِ
+يا مَوْلايَ يا أَبا عَبْدِ اللهِ
+أَنَا إِلَيْكَ مُشْتاقٌ وَفِي زِيارَتِكَ رَاغِبٌ`
+  },
+  {
+    title: 'زيارة الإمام المهدي (عج)',
+    sub: 'Ziyarat Imam al-Zaman (AJ) — after every prayer',
+    type: 'post-salah',
+    note: 'تُقرأ بعد كل صلاة — اللهم كن لوليك',
+    text: `اَللَّهُمَّ كُنْ لِوَلِيِّكَ الْحُجَّةِ بْنِ الْحَسَنِ
+صَلَواتُكَ عَلَيْهِ وَعَلى آبائِهِ
+فِي هذِهِ السَّاعَةِ وَفِي كُلِّ ساعَةٍ
+وَلِيّاً وَحافِظاً وَقائِداً وَناصِراً
+وَدَلِيلاً وَعَيْناً
+حَتَّى تُسْكِنَهُ أَرْضَكَ طَوْعاً
+وَتُمَتِّعَهُ فِيها طَوِيلاً`
+  },
+  {
+    title: 'زيارة النبي محمد (ص)',
+    sub: 'Ziyarat Rasulullah (PBUH) — after every prayer',
+    type: 'post-salah',
+    note: 'تُقرأ بعد كل صلاة',
+    text: `السَّلامُ عَلَيْكَ يا رَسُولَ اللهِ
+السَّلامُ عَلَيْكَ يا حَبِيبَ اللهِ
+السَّلامُ عَلَيْكَ يا صَفِيَّ اللهِ
+السَّلامُ عَلَيْكَ يا أَمِينَ اللهِ
+السَّلامُ عَلَيْكَ يا خِيَرَةَ اللهِ
+السَّلامُ عَلَيْكَ يا نَجِيَّ اللهِ
+السَّلامُ عَلَيْكَ يا خاتَمَ النَّبِيِّينَ
+وَسَيِّدَ الْمُرْسَلِينَ
+وَقائِدَ الْغُرِّ الْمُحَجَّلِينَ
+أَشْهَدُ أَنَّكَ قَدْ بَلَّغْتَ الرِّسالَةَ
+وَأَقَمْتَ الصَّلاةَ وَآتَيْتَ الزَّكاةَ
+وَأَمَرْتَ بِالْمَعْرُوفِ وَنَهَيْتَ عَنِ الْمُنْكَرِ
+وَعَبَدْتَ اللهَ مُخْلِصاً حَتَّى أَتاكَ الْيَقِينُ
+صَلَّى اللهُ عَلَيْكَ وَعَلى آلِكَ الطَّاهِرِينَ`
+  },
+  {
+    title: 'زيارة أمير المؤمنين الإمام علي (ع)',
+    sub: 'Ziyarat Imam Ali (AS) — after every prayer',
+    type: 'post-salah',
+    note: 'تُقرأ بعد كل صلاة',
+    text: `السَّلامُ عَلَيْكَ يا أَمِيرَ الْمُؤْمِنِينَ
+السَّلامُ عَلَيْكَ يا حَبِيبَ اللهِ
+السَّلامُ عَلَيْكَ يا صَفِيَّ اللهِ
+السَّلامُ عَلَيْكَ يا وَلِيَّ اللهِ
+السَّلامُ عَلَيْكَ يا حُجَّةَ اللهِ
+السَّلامُ عَلَيْكَ يا نُورَ اللهِ
+السَّلامُ عَلَيْكَ يا صِراطَ اللهِ
+السَّلامُ عَلَيْكَ يا بابَ اللهِ
+أَشْهَدُ أَنَّكَ أَخُو رَسُولِ اللهِ وَوَصِيُّهُ
+وَوارِثُ عِلْمِهِ وَالْقَيِّمُ بِأَمْرِهِ
+وَالْخَلِيفَةُ مِنْ بَعْدِهِ
+صَلَّى اللهُ عَلَيْكَ وَعَلى آلِكَ الطَّاهِرِينَ`
+  },
+  {
+    title: 'زيارة السيدة فاطمة الزهراء (ع)',
+    sub: 'Ziyarat Sayyida Fatima Zahra (AS) — after every prayer',
+    type: 'post-salah',
+    note: 'تُقرأ بعد كل صلاة',
+    text: `السَّلامُ عَلَيْكِ يا فاطِمَةُ الزَّهْراءُ
+السَّلامُ عَلَيْكِ يا بِنْتَ مُحَمَّدٍ الْمُصْطَفى
+السَّلامُ عَلَيْكِ يا بِنْتَ خَدِيجَةَ الْكُبْرى
+السَّلامُ عَلَيْكِ يا قَرِينَةَ أَمِيرِ الْمُؤْمِنِينَ
+السَّلامُ عَلَيْكِ يا أُمَّ الْحَسَنِ وَالْحُسَيْنِ
+سَيِّدَيْ شَبابِ أَهْلِ الْجَنَّةِ
+السَّلامُ عَلَيْكِ أَيَّتُهَا الصِّدِّيقَةُ الشَّهِيدَةُ
+السَّلامُ عَلَيْكِ أَيَّتُهَا الرَّضِيَّةُ الْمَرْضِيَّةُ
+السَّلامُ عَلَيْكِ يا سَيِّدَةَ نِساءِ الْعالَمِينَ
+صَلَّى اللهُ عَلَيْكِ وَعَلى رُوحِكِ وَبَدَنِكِ`
+  }
+];
+
+const AMAAL_WEEKLY = [
+  {
+    title: 'أعمال ليلة الجمعة ويوم الجمعة',
+    sub: 'Thursday night & Friday A\'maal',
+    type: 'amaal',
+    note: 'من مفاتيح الجنان — ليلة الجمعة ويومها',
+    text: `بِسْمِ اللهِ الرَّحْمٰنِ الرَّحِيمِ
+
+● دُعاءُ كُمَيْل — ليلة الجمعة
+يُقرأ ليلة الجمعة بعد صلاة المغرب أو العشاء
+
+● دُعاءُ النُّدبة — صباح الجمعة
+يُقرأ في صباح كل جمعة
+
+● زِيارةُ آلِ يٰسِين — يوم الجمعة
+تُقرأ يوم الجمعة تحيةً للإمام المهدي (عج)
+
+● الصَّلاةُ على النَّبِيِّ وَآلِهِ
+كثرة الصلاة على محمد وآل محمد يوم الجمعة
+
+● قِراءةُ سُورَةِ الكَهْف — يوم الجمعة
+
+● زِيارةُ الإمامِ الحُسَيْن (ع) — يوم الجمعة
+مستحب زيارته يوم الجمعة
+
+● صَلاةُ الجُمُعة أو صَلاةُ الظُّهر`
+  },
+  {
+    title: 'أعمال ليلة الخميس',
+    sub: 'Thursday night A\'maal',
+    type: 'amaal',
+    note: 'من مفاتيح الجنان',
+    text: `بِسْمِ اللهِ الرَّحْمٰنِ الرَّحِيمِ
+
+● دُعاءُ كُمَيْل
+يُقرأ ليلة الجمعة (ليلة الخميس بعد المغرب)
+وهو من أشهر الأدعية وأجمعها
+
+● زِيارةُ أَمِيرِ المُؤمِنِين (ع) — ليلة الجمعة
+
+● الاسْتِغفارُ والتَّوبة
+يستحب الإكثار من الاستغفار ليلة الجمعة
+
+● صَلاةُ لَيْلَةِ الجُمُعة
+ركعتان بعد المغرب ليلة الجمعة`
+  }
+];
+
+// ══════════════════════════════════════════════════
+// RENDER ZIYARAT
+// ══════════════════════════════════════════════════
+function renderZiyarat() {
+  const container = document.getElementById('ziyarat-list');
+  container.innerHTML = '';
+
+  // Post-salah section
+  const sec1 = document.createElement('div');
+  sec1.className = 'section-title';
+  sec1.textContent = 'زيارات ما بعد الصلاة — Post-Salah Ziyarat';
+  container.appendChild(sec1);
+
+  const note = document.createElement('div');
+  note.className = 'notif-bar';
+  note.style.marginBottom = '12px';
+  note.innerHTML = '<i class="ti ti-info-circle" style="font-size:16px;flex-shrink:0;"></i> تُقرأ هذه الزيارات القصيرة بعد كل صلاة مفروضة';
+  container.appendChild(note);
+
+  ZIYARAT_POST_SALAH.forEach((z, i) => {
+    container.appendChild(buildZiyaratCard(z, `ps-${i}`));
+  });
+
+  // A'maal section
+  const sec2 = document.createElement('div');
+  sec2.className = 'section-title';
+  sec2.style.marginTop = '20px';
+  sec2.textContent = 'أعمال الأسبوع — Weekly A\'maal';
+  container.appendChild(sec2);
+
+  AMAAL_WEEKLY.forEach((z, i) => {
+    container.appendChild(buildZiyaratCard(z, `am-${i}`));
+  });
+}
+
+function buildZiyaratCard(z, id) {
+  const card = document.createElement('div');
+  card.className = `ziyarat-card ${z.type}`;
+  card.innerHTML = `
+    <div class="ziyarat-header" onclick="toggleZiyarat('body-${id}', 'chev-${id}')">
+      <div>
+        <div class="ziyarat-title-ar">${z.title}</div>
+        <div class="ziyarat-title-sub">${z.sub}</div>
+      </div>
+      <i class="ti ti-chevron-down ziyarat-chevron" id="chev-${id}"></i>
+    </div>
+    <div class="ziyarat-body" id="body-${id}">
+      <div class="ziyarat-text">${z.text.replace(/\n/g, '<br>')}</div>
+      <div class="ziyarat-note">${z.note}</div>
+    </div>`;
+  return card;
+}
+
+function toggleZiyarat(bodyId, chevId) {
+  const body = document.getElementById(bodyId);
+  const chev = document.getElementById(chevId);
+  body.classList.toggle('open');
+  chev.classList.toggle('open');
+}
 function showTab(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
